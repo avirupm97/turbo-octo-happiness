@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, Calendar } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 interface ReactivatePlanModalProps {
   open: boolean;

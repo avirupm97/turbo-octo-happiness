@@ -106,7 +106,7 @@ export function DeleteTeamModal({
 
           <div className="bg-muted p-3 rounded-lg">
             <p className="text-sm text-muted-foreground">
-              <strong>What happens next:</strong> All team members will receive a copy of the team's invoice history in their individual accounts for their records.
+              <strong>What happens next:</strong> All team members will receive a copy of the team&apos;s invoice history in their individual accounts for their records.
             </p>
           </div>
         </div>

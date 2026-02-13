@@ -56,7 +56,7 @@ export function CreditWarningModal({
               <div className="space-y-2">
                 <p className="font-medium">Important: Credits May Be Lost</p>
                 <p className="text-sm mt-2">
-                  You're about to purchase <strong>{credits.toLocaleString()} credits</strong> for <strong>${price}</strong>.
+                  You&apos;re about to purchase <strong>{credits.toLocaleString()} credits</strong> for <strong>${price}</strong>.
                 </p>
                 <p className="text-sm">
                   However, your plan is set to expire on <strong>{expiryDate}</strong>.
@@ -82,7 +82,7 @@ export function CreditWarningModal({
 
           <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-3 rounded-lg">
             <p className="text-sm">
-              <strong>Recommendation:</strong> Consider reactivating your plan first, then purchase credits to ensure you don't lose your investment.
+              <strong>Recommendation:</strong> Consider reactivating your plan first, then purchase credits to ensure you don&apos;t lose your investment.
             </p>
           </div>
         </div>

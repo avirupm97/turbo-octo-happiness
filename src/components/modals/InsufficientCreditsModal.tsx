@@ -32,7 +32,7 @@ export function InsufficientCreditsModal({
             Insufficient Credits
           </DialogTitle>
           <DialogDescription>
-            You don't have enough credits to perform this action.
+            You don&apos;t have enough credits to perform this action.
           </DialogDescription>
         </DialogHeader>
 

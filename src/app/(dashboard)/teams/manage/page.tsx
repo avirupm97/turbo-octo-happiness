@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+
+
 import { useAuthStore } from '@/stores/useAuthStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,8 @@ import { getDaysUntilExpiry } from '@/lib/billing-utils';
 import { AlertCircle, Calendar, Info, Plus, Minus } from 'lucide-react';
 
 export default function ManageTeamsPage() {
-  const router = useRouter();
+
+
   const user = useAuthStore((state) => state.getCurrentUser());
   const buyExtraCredits = useAuthStore((state) => state.buyExtraCredits);
   const updateTeamPlanAndSeats = useAuthStore((state) => state.updateTeamPlanAndSeats);
@@ -145,7 +147,6 @@ export default function ManageTeamsPage() {
 
   const upgradeAvgCreditsPerSeat = upgradeSeats > 0 ? Math.floor(upgradeSelectedTier.credits / upgradeSeats) : 0;
   const showWarning = upgradeSeats > 0 && upgradeAvgCreditsPerSeat < MIN_AVG_CREDITS_PER_SEAT;
-  const currentMonthlyCost = (PRICING.TEAMS_TIERS.find(t => t.credits === user.teamsPlan.monthlyCredits)?.price || 0) + (user.teamsPlan.seats * PRICING.SEAT_PRICE);
   const newMonthlyCost = upgradeSelectedTier.price + ((user.teamsPlan.seats + upgradeSeats) * PRICING.SEAT_PRICE);
   const hasChanges = upgradeSeats !== 0 || upgradeSelectedTier.credits !== user.teamsPlan.monthlyCredits;
 

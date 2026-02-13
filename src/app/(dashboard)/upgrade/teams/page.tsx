@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { PaymentModal } from '@/components/modals/PaymentModal';
 import { PRICING, MIN_AVG_CREDITS_PER_SEAT } from '@/lib/constants';
-import { AlertCircle, Check } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export default function UpgradeTeamsPage() {
   const router = useRouter();
@@ -39,6 +39,7 @@ export default function UpgradeTeamsPage() {
       sharedCreditsUsed: 0,
       planName: selectedPlan.name,
       members: [],
+      extraCredits: 0,
     };
 
     upgradeToTeamsPlan(teamsPlan);

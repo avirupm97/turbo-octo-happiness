@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+
+
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -17,12 +18,12 @@ import { UsageSummaryCard } from '@/components/dashboard/UsageSummaryCard';
 import { BillingInvoicesCard } from '@/components/billing/BillingInvoicesCard';
 import { PRICING, MIN_AVG_CREDITS_PER_SEAT } from '@/lib/constants';
 import { getDaysUntilExpiry } from '@/lib/billing-utils';
-import { AlertCircle, Calendar, Sparkles, ChevronDown, ChevronUp, Info, Plus, Minus } from 'lucide-react';
+import { AlertCircle, Calendar, Sparkles, Info, Plus, Minus } from 'lucide-react';
 
 export default function YourPlanPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.getCurrentUser());
-  const buyCredits = useAuthStore((state) => state.buyCredits);
+  const _buyCredits = useAuthStore((state) => state.buyCredits);
   const buyExtraCredits = useAuthStore((state) => state.buyExtraCredits);
   const upgradeToProPlan = useAuthStore((state) => state.upgradeToProPlan);
   const upgradeToTeamsPlan = useAuthStore((state) => state.upgradeToTeamsPlan);
@@ -39,7 +40,7 @@ export default function YourPlanPage() {
   const [upgradeSelectedTier, setUpgradeSelectedTier] = useState<typeof PRICING.TEAMS_TIERS[number]>(PRICING.TEAMS_TIERS[0]);
   const [selectedTier, setSelectedTier] = useState<typeof PRICING.PRO_TIERS[number]>(PRICING.PRO_TIERS[0]);
   const [selectedProUpgradeTier, setSelectedProUpgradeTier] = useState<typeof PRICING.PRO_TIERS[number] | null>(null);
-  const [selectedExtraCreditBundle, setSelectedExtraCreditBundle] = useState<typeof PRICING.EXTRA_CREDIT_BUNDLES[number] | null>(null);
+  const [_selectedExtraCreditBundle, _setSelectedExtraCreditBundle] = useState<typeof PRICING.EXTRA_CREDIT_BUNDLES[number] | null>(null);
   const [selectedTeamsTier, setSelectedTeamsTier] = useState<typeof PRICING.TEAMS_TIERS[number]>(PRICING.TEAMS_TIERS[0]);
   const [teamSeats, setTeamSeats] = useState(0);
   const [extraCreditsCount, setExtraCreditsCount] = useState<Record<number, number>>({

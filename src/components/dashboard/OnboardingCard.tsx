@@ -1,7 +1,8 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+
+
 import { ThumbsUp, ThumbsDown, MoreHorizontal, LucideIcon } from 'lucide-react';
 
 interface OnboardingCardProps {
@@ -17,9 +18,9 @@ export function OnboardingCard({
   icon: Icon,
   title,
   description,
-  buttonText,
-  buttonVariant = 'default',
-  onButtonClick,
+  buttonText: _buttonText,
+  buttonVariant: _buttonVariant = 'default',
+  onButtonClick: _onButtonClick,
 }: OnboardingCardProps) {
   return (
     <Card className="border-primary/20 h-full w-full max-w-[400px] mx-auto">

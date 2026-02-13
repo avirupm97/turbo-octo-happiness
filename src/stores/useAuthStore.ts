@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, UserData, ProPlan, TeamsPlan, Invoice, CreditTransaction } from '@/lib/types';
 import { INITIAL_FREE_CREDITS, PRICING } from '@/lib/constants';
-import { calculateBillingCycleEnd, calculateProDowngradeCredits } from '@/lib/billing-utils';
+import { calculateBillingCycleEnd } from '@/lib/billing-utils';
 
 interface AuthStore extends UserData {
   setCurrentUser: (email: string) => void;

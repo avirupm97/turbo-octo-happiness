@@ -119,7 +119,7 @@ export default function TeamUsagePage() {
           ) : (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-foreground">
-                {selectedMember}'s past chats
+                {selectedMember}&apos;s past chats
               </h2>
               
               <Accordion type="single" collapsible defaultValue="item-0">

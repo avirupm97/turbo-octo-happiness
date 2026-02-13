@@ -133,7 +133,7 @@ export default function UpgradeProPage() {
         <Card>
           <CardContent className="py-8 text-center">
             <p className="text-muted-foreground">
-              You're already on the highest Pro tier!
+              You&apos;re already on the highest Pro tier!
             </p>
           </CardContent>
         </Card>
