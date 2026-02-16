@@ -1,16 +1,27 @@
 export type PlanTier = 'free' | 'pro' | 'teams';
 
+export type BillingInterval = 'monthly' | 'annual';
+
 export interface ProPlan {
   monthlyCredits: number;
   price: number;
   name: string;
+  billingInterval: BillingInterval;
 }
 
 export interface TeamMember {
   email: string;
   creditLimit?: number;
   role: 'owner' | 'member';
+  status: 'pending' | 'active';
   joinedAt: Date;
+}
+
+export interface BillingAdmin {
+  email: string;
+  status: 'pending' | 'active';
+  invitedAt: Date;
+  acceptedAt?: Date;
 }
 
 export interface TeamsPlan {
@@ -21,6 +32,7 @@ export interface TeamsPlan {
   sharedCreditsUsed: number;
   planName: string;
   members: TeamMember[];
+  billingAdmins: BillingAdmin[];
   extraCredits: number;
 }
 

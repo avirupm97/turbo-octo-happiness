@@ -6,8 +6,11 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { PaymentModal } from '@/components/modals/PaymentModal';
 import { PRICING } from '@/lib/constants';
+import type { BillingInterval } from '@/lib/types';
 import { Check } from 'lucide-react';
 
 export default function UpgradeProPage() {
@@ -19,6 +22,7 @@ export default function UpgradeProPage() {
   
   const [selectedTier, setSelectedTier] = useState<typeof PRICING.PRO_TIERS[number] | null>(null);
   const [showPayment, setShowPayment] = useState(false);
+  const [isAnnualBilling, setIsAnnualBilling] = useState(false);
 
   if (!user) return null;
 
@@ -35,10 +39,13 @@ export default function UpgradeProPage() {
   const handleConfirmPayment = () => {
     if (!selectedTier) return;
 
+    const billingInterval: BillingInterval = isAnnualBilling ? 'annual' : 'monthly';
+    const price = isAnnualBilling ? selectedTier.annualPrice : selectedTier.price;
     const proPlan = {
       monthlyCredits: selectedTier.credits,
-      price: selectedTier.price,
+      price,
       name: selectedTier.name,
+      billingInterval,
     };
 
     if (user.plan === 'free') {
@@ -49,8 +56,8 @@ export default function UpgradeProPage() {
 
     addInvoice({
       date: new Date(),
-      amount: selectedTier.price,
-      description: `${selectedTier.name} subscription`,
+      amount: price,
+      description: `${selectedTier.name} subscription (${billingInterval})`,
       status: 'paid',
     });
 
@@ -59,15 +66,27 @@ export default function UpgradeProPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">
-          {user.plan === 'pro' ? 'Upgrade Pro Plan' : 'Upgrade to Pro'}
-        </h1>
-        <p className="text-muted-foreground">
-          {user.plan === 'pro' 
-            ? 'Select a higher tier for more credits' 
-            : 'Choose a Pro plan that fits your needs'}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">
+            {user.plan === 'pro' ? 'Upgrade Pro Plan' : 'Upgrade to Pro'}
+          </h1>
+          <p className="text-muted-foreground">
+            {user.plan === 'pro' 
+              ? 'Select a higher tier for more credits' 
+              : 'Choose a Pro plan that fits your needs'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Label htmlFor="annual-toggle-upgrade" className="text-sm cursor-pointer whitespace-nowrap">
+            Annual <span className="text-primary font-medium">(20% off)</span>
+          </Label>
+          <Switch
+            id="annual-toggle-upgrade"
+            checked={isAnnualBilling}
+            onCheckedChange={setIsAnnualBilling}
+          />
+        </div>
       </div>
 
       {user.plan === 'pro' && (
@@ -80,7 +99,9 @@ export default function UpgradeProPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-2xl font-bold">{user.proPlan?.monthlyCredits} credits/mo</p>
-                <p className="text-sm text-muted-foreground">${user.proPlan?.price}/month</p>
+                <p className="text-sm text-muted-foreground">
+                  ${user.proPlan?.price}{user.proPlan?.billingInterval === 'annual' ? '/year' : '/month'}
+                </p>
               </div>
               <Badge>Current</Badge>
             </div>
@@ -88,7 +109,7 @@ export default function UpgradeProPage() {
         </Card>
       )}
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {availableTiers.map((tier) => (
           <Card
             key={tier.credits}
@@ -100,8 +121,17 @@ export default function UpgradeProPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <div className="text-4xl font-bold">${tier.price}</div>
-                <p className="text-sm text-muted-foreground">per month</p>
+                {isAnnualBilling ? (
+                  <>
+                    <div className="text-4xl font-bold">${tier.annualPrice}</div>
+                    <p className="text-sm text-muted-foreground">per year (${Math.round(tier.annualPrice / 12)}/month)</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-4xl font-bold">${tier.price}</div>
+                    <p className="text-sm text-muted-foreground">per month</p>
+                  </>
+                )}
               </div>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center">
@@ -122,7 +152,7 @@ export default function UpgradeProPage() {
                 </li>
               </ul>
               <Button className="w-full" onClick={() => handleSelectTier(tier)}>
-                Select Plan
+                Select Plan {isAnnualBilling ? `- $${tier.annualPrice}/yr` : `- $${tier.price}/mo`}
               </Button>
             </CardContent>
           </Card>
@@ -144,8 +174,8 @@ export default function UpgradeProPage() {
           open={showPayment}
           onOpenChange={setShowPayment}
           title="Confirm Pro Subscription"
-          description={`You're subscribing to ${selectedTier.name} with ${selectedTier.credits} monthly credits.`}
-          amount={selectedTier.price}
+          description={`You're subscribing to ${selectedTier.name} with ${selectedTier.credits.toLocaleString()} monthly credits (${isAnnualBilling ? 'annual' : 'monthly'} billing).`}
+          amount={isAnnualBilling ? selectedTier.annualPrice : selectedTier.price}
           onConfirm={handleConfirmPayment}
         />
       )}

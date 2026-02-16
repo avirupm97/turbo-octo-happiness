@@ -1,11 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, UserData, ProPlan, TeamsPlan, Invoice, CreditTransaction } from '@/lib/types';
+import type { User, UserData, ProPlan, TeamsPlan, Invoice, CreditTransaction, TeamMember } from '@/lib/types';
 import { INITIAL_FREE_CREDITS, PRICING } from '@/lib/constants';
-import { calculateBillingCycleEnd } from '@/lib/billing-utils';
+import { calculateBillingCycleEnd, calculateAnnualBillingCycleEnd } from '@/lib/billing-utils';
 
 interface AuthStore extends UserData {
+  impersonatedUser: string | null;
   setCurrentUser: (email: string) => void;
+  setImpersonatedUser: (email: string | null) => void;
+  getViewingAsUser: () => User | null;
+  isViewingAsBillingAdmin: () => boolean;
   login: (email: string) => void;
   logout: () => void;
   clearStorage: () => void;
@@ -33,6 +37,14 @@ interface AuthStore extends UserData {
   transferTeamOwnership: (newOwnerEmail: string) => void;
   removeTeamMember: (memberEmail: string) => void;
   burnCredits: (amount: number) => void;
+  inviteBillingAdmin: (email: string) => void;
+  removeBillingAdmin: (email: string) => void;
+  acceptBillingAdminInvite: (email: string) => void;
+  convertBillingAdminToMember: (email: string, creditLimit?: number) => void;
+  convertMemberToBillingAdmin: (email: string) => void;
+  makeTeamOwner: (email: string) => void;
+  markMemberAsActive: (email: string) => void;
+  markBillingAdminAsActive: (email: string) => void;
 }
 
 const createDefaultUser = (email: string): User => ({
@@ -50,6 +62,7 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
       currentUser: '',
       users: {},
+      impersonatedUser: null,
 
       setCurrentUser: (email: string) => {
         const { users } = get();
@@ -65,14 +78,27 @@ export const useAuthStore = create<AuthStore>()(
           // Add signup transaction for new users
           get().addCreditTransaction('signup', INITIAL_FREE_CREDITS, `+${INITIAL_FREE_CREDITS} (Signup)`);
         } else {
-          // Initialize creditTransactions array if it doesn't exist (for existing users)
-          if (!users[email].creditTransactions) {
+          // Initialize missing fields for existing users
+          const user = users[email];
+          const needsUpdate = !user.creditTransactions || 
+            (user.teamsPlan && !user.teamsPlan.billingAdmins) ||
+            (user.teamsPlan && user.teamsPlan.members.some((m: TeamMember) => !m.status));
+          
+          if (needsUpdate) {
             set((state) => ({
               users: {
                 ...state.users,
                 [email]: {
-                  ...users[email],
-                  creditTransactions: [],
+                  ...user,
+                  creditTransactions: user.creditTransactions || [],
+                  teamsPlan: user.teamsPlan ? {
+                    ...user.teamsPlan,
+                    billingAdmins: user.teamsPlan.billingAdmins || [],
+                    members: user.teamsPlan.members.map((member: TeamMember) => ({
+                      ...member,
+                      status: member.status || 'active',
+                    })),
+                  } : undefined,
                 },
               },
               currentUser: email,
@@ -101,13 +127,36 @@ export const useAuthStore = create<AuthStore>()(
         return users[currentUser] || null;
       },
 
+      setImpersonatedUser: (email: string | null) => {
+        set({ impersonatedUser: email });
+      },
+
+      getViewingAsUser: () => {
+        const { currentUser, impersonatedUser, users } = get();
+        const viewingEmail = impersonatedUser || currentUser;
+        return users[viewingEmail] || null;
+      },
+
+      isViewingAsBillingAdmin: () => {
+        const { currentUser, impersonatedUser, users } = get();
+        if (!impersonatedUser || !currentUser) return false;
+        
+        const loggedInUser = users[currentUser];
+        if (!loggedInUser || loggedInUser.plan !== 'teams' || !loggedInUser.teamsPlan) return false;
+        
+        const billingAdmins = loggedInUser.teamsPlan.billingAdmins || [];
+        return billingAdmins.some(admin => admin.email === impersonatedUser && admin.status === 'active');
+      },
+
       upgradeToProPlan: (proPlan: ProPlan) => {
         const { currentUser, users } = get();
         if (!currentUser) return;
 
         const user = users[currentUser];
         const billingCycle = new Date();
-        const billingCycleEnd = calculateBillingCycleEnd(billingCycle);
+        const billingCycleEnd = proPlan.billingInterval === 'annual'
+          ? calculateAnnualBillingCycleEnd(billingCycle)
+          : calculateBillingCycleEnd(billingCycle);
         
         set({
           users: {
@@ -154,7 +203,8 @@ export const useAuthStore = create<AuthStore>()(
               teamsPlan: {
                 ...teamsPlan,
                 sharedCredits: teamsPlan.sharedCredits + remainingProCredits + proExtraCredits,
-                members: [{ email: currentUser, role: 'owner', joinedAt: new Date() }],
+                members: [{ email: currentUser, role: 'owner', status: 'active', joinedAt: new Date() }],
+                billingAdmins: teamsPlan.billingAdmins || [],
                 extraCredits: proExtraCredits,
               },
               credits: 0,
@@ -182,9 +232,11 @@ export const useAuthStore = create<AuthStore>()(
 
         const user = users[currentUser];
         
-        // If plan is cancelled, reset billing cycle to 30 days from today
+        // Reset billing cycle based on billing interval
         const billingCycle = new Date();
-        const billingCycleEnd = calculateBillingCycleEnd(billingCycle);
+        const billingCycleEnd = proPlan.billingInterval === 'annual'
+          ? calculateAnnualBillingCycleEnd(billingCycle)
+          : calculateBillingCycleEnd(billingCycle);
         
         set({
           users: {
@@ -314,6 +366,7 @@ export const useAuthStore = create<AuthStore>()(
                     email: memberEmail,
                     creditLimit,
                     role: 'member',
+                    status: 'pending',
                     joinedAt: new Date(),
                   },
                 ],
@@ -870,9 +923,238 @@ export const useAuthStore = create<AuthStore>()(
 
         set({ users: updatedUsers });
       },
+
+      inviteBillingAdmin: (email: string) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        // Initialize billingAdmins array if it doesn't exist
+        const billingAdmins = user.teamsPlan.billingAdmins || [];
+
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                billingAdmins: [
+                  ...billingAdmins,
+                  {
+                    email,
+                    status: 'pending',
+                    invitedAt: new Date(),
+                  },
+                ],
+              },
+            },
+          },
+        });
+      },
+
+      removeBillingAdmin: (email: string) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        const billingAdmins = user.teamsPlan.billingAdmins || [];
+
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                billingAdmins: billingAdmins.filter((admin) => admin.email !== email),
+              },
+            },
+          },
+        });
+      },
+
+      acceptBillingAdminInvite: (email: string) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        const billingAdmins = user.teamsPlan.billingAdmins || [];
+
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                billingAdmins: billingAdmins.map((admin) =>
+                  admin.email === email
+                    ? { ...admin, status: 'active' as const, acceptedAt: new Date() }
+                    : admin
+                ),
+              },
+            },
+          },
+        });
+      },
+
+      convertBillingAdminToMember: (email: string, creditLimit?: number) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        const billingAdmins = user.teamsPlan.billingAdmins || [];
+
+        // Remove from billing admins and add to members
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                billingAdmins: billingAdmins.filter((admin) => admin.email !== email),
+                members: [
+                  ...user.teamsPlan.members,
+                  {
+                    email,
+                    creditLimit,
+                    role: 'member',
+                    status: 'active',
+                    joinedAt: new Date(),
+                  },
+                ],
+              },
+            },
+          },
+        });
+      },
+
+      convertMemberToBillingAdmin: (email: string) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        const billingAdmins = user.teamsPlan.billingAdmins || [];
+
+        // Remove from members and add to billing admins
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                members: user.teamsPlan.members.filter((member) => member.email !== email),
+                billingAdmins: [
+                  ...billingAdmins,
+                  {
+                    email,
+                    status: 'active',
+                    invitedAt: new Date(),
+                  },
+                ],
+              },
+            },
+          },
+        });
+      },
+
+      makeTeamOwner: (email: string) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        // Update member role to owner
+        const updatedMembers = user.teamsPlan.members.map((member) =>
+          member.email === email ? { ...member, role: 'owner' as const } : member
+        );
+
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                members: updatedMembers,
+              },
+            },
+          },
+        });
+      },
+
+      markMemberAsActive: (email: string) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        // Update member status to active
+        const updatedMembers = user.teamsPlan.members.map((member) =>
+          member.email === email ? { ...member, status: 'active' as const } : member
+        );
+
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                members: updatedMembers,
+              },
+            },
+          },
+        });
+      },
+
+      markBillingAdminAsActive: (email: string) => {
+        const { currentUser, users } = get();
+        if (!currentUser) return;
+
+        const user = users[currentUser];
+        if (!user.teamsPlan) return;
+
+        // Update billing admin status to active
+        const updatedBillingAdmins = (user.teamsPlan.billingAdmins || []).map((admin) =>
+          admin.email === email ? { ...admin, status: 'active' as const } : admin
+        );
+
+        set({
+          users: {
+            ...users,
+            [currentUser]: {
+              ...user,
+              teamsPlan: {
+                ...user.teamsPlan,
+                billingAdmins: updatedBillingAdmins,
+              },
+            },
+          },
+        });
+      },
     }),
     {
       name: 'kombai-user-data',
+      partialize: (state) => ({
+        currentUser: state.currentUser,
+        users: state.users,
+      }),
     }
   )
 );

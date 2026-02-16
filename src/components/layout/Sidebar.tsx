@@ -42,8 +42,9 @@ import {
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { getCurrentUser, currentUser, logout, clearStorage, setCurrentUser, users, processBillingCycle, burnCredits } = useAuthStore();
-  const user = getCurrentUser();
+  const { getCurrentUser, getViewingAsUser, currentUser, impersonatedUser, logout, clearStorage, setImpersonatedUser, processBillingCycle, burnCredits } = useAuthStore();
+  const loggedInUser = getCurrentUser();
+  const user = getViewingAsUser();
   const [showInsufficientCreditsModal, setShowInsufficientCreditsModal] = useState(false);
   const [availableCredits, setAvailableCredits] = useState(0);
 
@@ -58,8 +59,52 @@ export function AppSidebar() {
   };
 
   const handleImpersonate = (email: string) => {
-    setCurrentUser(email);
+    // If selecting the logged-in user, clear impersonation
+    if (email === currentUser) {
+      setImpersonatedUser(null);
+    } else {
+      setImpersonatedUser(email);
+    }
     router.refresh();
+  };
+
+  // Get list of users to show in dropdown based on plan
+  const getAvailableUsers = (): string[] => {
+    if (!loggedInUser) return [];
+
+    // For Free and Pro users, only show themselves
+    if (loggedInUser.plan === 'free' || loggedInUser.plan === 'pro') {
+      return [currentUser];
+    }
+
+    // For Teams users, show all active members and billing admins
+    if (loggedInUser.plan === 'teams' && loggedInUser.teamsPlan) {
+      const activeMembers = loggedInUser.teamsPlan.members
+        .filter(member => member.status === 'active')
+        .map(member => member.email);
+
+      const activeBillingAdmins = (loggedInUser.teamsPlan.billingAdmins || [])
+        .filter(admin => admin.status === 'active')
+        .map(admin => admin.email);
+
+      // Combine and remove duplicates, then sort alphabetically
+      const allUsers = [...new Set([...activeMembers, ...activeBillingAdmins])];
+      return allUsers.sort();
+    }
+
+    return [currentUser];
+  };
+
+  const availableUsers = getAvailableUsers();
+  const viewingAsEmail = impersonatedUser || currentUser;
+
+  // Check if viewing user is a billing admin of the logged-in user's team
+  const isViewingAsBillingAdmin = (): boolean => {
+    if (!loggedInUser || !impersonatedUser) return false;
+    if (loggedInUser.plan !== 'teams' || !loggedInUser.teamsPlan) return false;
+    
+    const billingAdmins = loggedInUser.teamsPlan.billingAdmins || [];
+    return billingAdmins.some(admin => admin.email === impersonatedUser && admin.status === 'active');
   };
 
   const handleProcessBillingCycle = () => {
@@ -98,14 +143,16 @@ export function AppSidebar() {
     { href: '/usage', icon: TrendingUp, label: 'Usage' },
   ];
 
-  const teamItems =
-    user?.plan === 'teams'
-      ? [
-          { href: '/teams/members', icon: Users, label: 'Team Members' },
-          { href: '/teams/usage', icon: BarChart3, label: 'Team Usage' },
-          { href: '/teams/manage', icon: Settings, label: 'Manage Team' },
-        ]
-      : [];
+  // Show team items if viewing user has teams plan OR is a billing admin
+  const shouldShowTeamItems = user?.plan === 'teams' || isViewingAsBillingAdmin();
+  
+  const teamItems = shouldShowTeamItems
+    ? [
+        { href: '/teams/members', icon: Users, label: 'Team Members' },
+        { href: '/teams/usage', icon: BarChart3, label: 'Team Usage' },
+        { href: '/teams/manage', icon: Settings, label: 'Manage Team' },
+      ]
+    : [];
 
   return (
     <Sidebar>
@@ -176,20 +223,20 @@ export function AppSidebar() {
 
         {/* User Impersonation Dropdown */}
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground px-2">User</div>
+          <div className="text-xs text-muted-foreground px-2">Viewing as</div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="w-full justify-between">
-                <span className="truncate">{currentUser || 'Select user'}</span>
+                <span className="truncate">{viewingAsEmail || 'Select user'}</span>
                 <ChevronDown className="h-4 w-4 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {Object.keys(users).map((email) => (
+              {availableUsers.map((email) => (
                 <DropdownMenuItem
                   key={email}
                   onClick={() => handleImpersonate(email)}
-                  className={currentUser === email ? 'bg-accent' : ''}
+                  className={viewingAsEmail === email ? 'bg-accent' : ''}
                 >
                   {email}
                 </DropdownMenuItem>

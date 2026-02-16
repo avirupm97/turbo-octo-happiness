@@ -22,6 +22,7 @@ export default function ManageTeamsPage() {
 
 
   const user = useAuthStore((state) => state.getCurrentUser());
+  const isViewingAsBillingAdmin = useAuthStore((state) => state.isViewingAsBillingAdmin());
   const buyExtraCredits = useAuthStore((state) => state.buyExtraCredits);
   const updateTeamPlanAndSeats = useAuthStore((state) => state.updateTeamPlanAndSeats);
   const addInvoice = useAuthStore((state) => state.addInvoice);
@@ -44,7 +45,8 @@ export default function ManageTeamsPage() {
     10000: 0,
   });
 
-  if (!user || user.plan !== 'teams' || !user.teamsPlan) {
+  // Allow access if user has teams plan OR is viewing as billing admin
+  if (!user || (user.plan !== 'teams' && !isViewingAsBillingAdmin) || !user.teamsPlan) {
     return null;
   }
 
@@ -184,7 +186,7 @@ export default function ManageTeamsPage() {
                 The billing cycle has been processed. Team expires on <strong>{expiryDate}</strong>.
               </p>
               <p className="text-sm mt-2">
-                {isTeamsOwner ? 'You can reactivate the plan to start a new billing cycle or delete the team permanently.' : 'The team owner can reactivate the plan or delete the team.'}
+                {isTeamsOwner ? 'You can reactivate the plan to start a new billing cycle or delete the team permanently.' : 'The team admin can reactivate the plan or delete the team.'}
               </p>
             </div>
           </AlertDescription>
@@ -193,7 +195,7 @@ export default function ManageTeamsPage() {
 
       <QuickStatsCard user={user} totalCredits={totalCredits} usedCredits={usedCredits} isTeamsOwner={isTeamsOwner} />
 
-      {/* Only show upgrade/buy sections to team owners */}
+      {/* Only show upgrade/buy sections to team admins */}
       {isTeamsOwner && !isCancelled && (
         <div className="grid gap-6 md:grid-cols-2">
           {/* Get more from Teams */}
@@ -234,7 +236,7 @@ export default function ManageTeamsPage() {
                   <SelectContent className="w-[300px]">
                     {PRICING.TEAMS_TIERS.map((tier) => (
                       <SelectItem key={tier.credits} value={tier.credits.toString()}>
-                        {tier.name} - {tier.credits.toLocaleString()} credits/month (${tier.price})
+                        {tier.credits.toLocaleString()} credits/month (${tier.price})
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1,8 +1,14 @@
-import { BILLING_CYCLE_DAYS, MAX_FREE_CREDITS_ON_DOWNGRADE } from './constants';
+import { BILLING_CYCLE_DAYS, ANNUAL_BILLING_CYCLE_DAYS, MAX_FREE_CREDITS_ON_DOWNGRADE } from './constants';
 
 export function calculateBillingCycleEnd(startDate: Date): Date {
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + BILLING_CYCLE_DAYS);
+  return endDate;
+}
+
+export function calculateAnnualBillingCycleEnd(startDate: Date): Date {
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + ANNUAL_BILLING_CYCLE_DAYS);
   return endDate;
 }
 

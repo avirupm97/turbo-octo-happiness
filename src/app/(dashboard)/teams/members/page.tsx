@@ -6,17 +6,41 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 import { InviteMemberModal } from '@/components/modals/InviteMemberModal';
-import { UserPlus, Settings } from 'lucide-react';
+import { RemoveMemberModal } from '@/components/modals/RemoveMemberModal';
+import { ConvertMemberToBillingAdminModal } from '@/components/modals/ConvertMemberToBillingAdminModal';
+import { MakeTeamOwnerModal } from '@/components/modals/MakeTeamOwnerModal';
+import { BillingAdminsSection } from '@/components/teams/BillingAdminsSection';
+import { UserPlus, Settings, MoreVertical, UserMinus, Shield, Crown, UserCheck } from 'lucide-react';
 
 export default function TeamMembersPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.getCurrentUser());
+  const isViewingAsBillingAdmin = useAuthStore((state) => state.isViewingAsBillingAdmin());
   const addTeamMember = useAuthStore((state) => state.addTeamMember);
+  const inviteBillingAdmin = useAuthStore((state) => state.inviteBillingAdmin);
+  const removeBillingAdmin = useAuthStore((state) => state.removeBillingAdmin);
+  const convertBillingAdminToMember = useAuthStore((state) => state.convertBillingAdminToMember);
+  const removeTeamMember = useAuthStore((state) => state.removeTeamMember);
+  const convertMemberToBillingAdmin = useAuthStore((state) => state.convertMemberToBillingAdmin);
+  const makeTeamOwner = useAuthStore((state) => state.makeTeamOwner);
+  const markMemberAsActive = useAuthStore((state) => state.markMemberAsActive);
+  const markBillingAdminAsActive = useAuthStore((state) => state.markBillingAdminAsActive);
+  
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
+  const [showConvertToBillingAdminModal, setShowConvertToBillingAdminModal] = useState(false);
+  const [showMakeOwnerModal, setShowMakeOwnerModal] = useState(false);
+  const [selectedMemberEmail, setSelectedMemberEmail] = useState('');
 
-  if (!user || user.plan !== 'teams' || !user.teamsPlan) {
+  // Allow access if user has teams plan OR is viewing as billing admin
+  if (!user || (user.plan !== 'teams' && !isViewingAsBillingAdmin) || !user.teamsPlan) {
     return null;
   }
 
@@ -25,6 +49,69 @@ export default function TeamMembersPage() {
   };
 
   const availableSeats = user.teamsPlan.seats - user.teamsPlan.members.length;
+
+  // Check if current user is Team Admin or Billing Admin
+  const currentMember = user.teamsPlan.members.find((m) => m.email === user.email);
+  const isTeamOwner = currentMember?.role === 'owner';
+  const billingAdmins = user.teamsPlan.billingAdmins || [];
+  const isBillingAdmin = billingAdmins.some((admin) => admin.email === user.email && admin.status === 'active');
+  const canManageBillingAdmins = isTeamOwner || isBillingAdmin;
+
+  const handleInviteBillingAdmin = (email: string) => {
+    inviteBillingAdmin(email);
+  };
+
+  const handleRemoveBillingAdmin = (email: string) => {
+    removeBillingAdmin(email);
+  };
+
+  const handleConvertBillingAdminToMember = (email: string) => {
+    convertBillingAdminToMember(email);
+  };
+
+  const handleRemoveMember = (email: string) => {
+    setSelectedMemberEmail(email);
+    setShowRemoveMemberModal(true);
+  };
+
+  const handleConvertToBillingAdmin = (email: string) => {
+    setSelectedMemberEmail(email);
+    setShowConvertToBillingAdminModal(true);
+  };
+
+  const handleMakeOwner = (email: string) => {
+    setSelectedMemberEmail(email);
+    setShowMakeOwnerModal(true);
+  };
+
+  const handleMarkAsActive = (email: string) => {
+    markMemberAsActive(email);
+  };
+
+  const handleMarkBillingAdminAsActive = (email: string) => {
+    markBillingAdminAsActive(email);
+  };
+
+  const confirmRemoveMember = () => {
+    if (selectedMemberEmail) {
+      removeTeamMember(selectedMemberEmail);
+      setSelectedMemberEmail('');
+    }
+  };
+
+  const confirmConvertToBillingAdmin = () => {
+    if (selectedMemberEmail) {
+      convertMemberToBillingAdmin(selectedMemberEmail);
+      setSelectedMemberEmail('');
+    }
+  };
+
+  const confirmMakeOwner = () => {
+    if (selectedMemberEmail) {
+      makeTeamOwner(selectedMemberEmail);
+      setSelectedMemberEmail('');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -39,38 +126,9 @@ export default function TeamMembersPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Seats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{user.teamsPlan.seats}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Active Members</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{user.teamsPlan.members.length}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Available Seats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{availableSeats}</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {availableSeats <= 0 && (
-        <Card className="border-primary">
-          <CardContent className="pt-6">
+        <Card className="border-primary py-2">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">All seats are occupied</p>
@@ -89,7 +147,7 @@ export default function TeamMembersPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Members</CardTitle>
-              <CardDescription>Team members and their roles</CardDescription>
+              <CardDescription>{user.teamsPlan.members.length}/{user.teamsPlan.seats} seats used</CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowInviteModal(true)} disabled={availableSeats <= 0}>
               <UserPlus className="mr-2 h-4 w-4" />
@@ -103,34 +161,112 @@ export default function TeamMembersPage() {
               <TableRow>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Credit Limit</TableHead>
-                <TableHead>Joined</TableHead>
+                <TableHead>Invited</TableHead>
+                {canManageBillingAdmins && <TableHead className="w-[70px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {user.teamsPlan.members.map((member) => (
-                <TableRow key={member.email}>
-                  <TableCell className="font-medium">{member.email}</TableCell>
-                  <TableCell>
-                    <Badge variant={member.role === 'owner' ? 'default' : 'outline'}>
-                      {member.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{member.creditLimit || 'No limit'}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(member.joinedAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {user.teamsPlan.members.map((member) => {
+                const canManageThisMember = canManageBillingAdmins && member.email !== user.email;
+                return (
+                  <TableRow key={member.email}>
+                    <TableCell className="font-medium">{member.email}</TableCell>
+                    <TableCell>
+                      {member.role === 'owner' ? 'Team Admin' : 'Team Member'}
+                    </TableCell>
+                    <TableCell>
+                      {member.status === 'pending' ? 'Invited' : 'Active'}
+                    </TableCell>
+                    <TableCell>{member.creditLimit || 'No limit'}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(member.joinedAt).toLocaleDateString()}
+                    </TableCell>
+                    {canManageBillingAdmins && (
+                      <TableCell>
+                        {canManageThisMember && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {member.status === 'pending' && (
+                                <DropdownMenuItem onClick={() => handleMarkAsActive(member.email)}>
+                                  <UserCheck className="mr-2 h-4 w-4" />
+                                  Mark as Active
+                                </DropdownMenuItem>
+                              )}
+                              {member.role === 'member' && (
+                                <DropdownMenuItem onClick={() => handleMakeOwner(member.email)}>
+                                  <Crown className="mr-2 h-4 w-4" />
+                                  Make Team Admin
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => handleConvertToBillingAdmin(member.email)}>
+                                <Shield className="mr-2 h-4 w-4" />
+                                Add as Billing Admin
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleRemoveMember(member.email)}
+                                variant="destructive"
+                              >
+                                <UserMinus className="mr-2 h-4 w-4" />
+                                Remove from Team
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
+      <BillingAdminsSection
+        billingAdmins={billingAdmins}
+        members={user.teamsPlan.members}
+        currentUserEmail={user.email}
+        canManageBillingAdmins={canManageBillingAdmins}
+        availableSeats={availableSeats}
+        onInvite={handleInviteBillingAdmin}
+        onRemove={handleRemoveBillingAdmin}
+        onConvertToMember={handleConvertBillingAdminToMember}
+        onMarkAsActive={handleMarkBillingAdminAsActive}
+      />
+
       <InviteMemberModal
         open={showInviteModal}
         onOpenChange={setShowInviteModal}
         onInvite={handleInviteMember}
+      />
+
+      <RemoveMemberModal
+        open={showRemoveMemberModal}
+        onOpenChange={setShowRemoveMemberModal}
+        onConfirm={confirmRemoveMember}
+        email={selectedMemberEmail}
+      />
+
+      <ConvertMemberToBillingAdminModal
+        open={showConvertToBillingAdminModal}
+        onOpenChange={setShowConvertToBillingAdminModal}
+        onConfirm={confirmConvertToBillingAdmin}
+        email={selectedMemberEmail}
+      />
+
+      <MakeTeamOwnerModal
+        open={showMakeOwnerModal}
+        onOpenChange={setShowMakeOwnerModal}
+        onConfirm={confirmMakeOwner}
+        email={selectedMemberEmail}
       />
     </div>
   );

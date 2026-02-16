@@ -39,6 +39,7 @@ export default function UpgradeTeamsPage() {
       sharedCreditsUsed: 0,
       planName: selectedPlan.name,
       members: [],
+      billingAdmins: [],
       extraCredits: 0,
     };
 

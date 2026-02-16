@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,11 +19,15 @@ import { UsageSummaryCard } from '@/components/dashboard/UsageSummaryCard';
 import { BillingInvoicesCard } from '@/components/billing/BillingInvoicesCard';
 import { PRICING, MIN_AVG_CREDITS_PER_SEAT } from '@/lib/constants';
 import { getDaysUntilExpiry } from '@/lib/billing-utils';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import type { BillingInterval } from '@/lib/types';
 import { AlertCircle, Calendar, Sparkles, Info, Plus, Minus } from 'lucide-react';
 
 export default function YourPlanPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.getCurrentUser());
+  const isViewingAsBillingAdmin = useAuthStore((state) => state.isViewingAsBillingAdmin());
   const _buyCredits = useAuthStore((state) => state.buyCredits);
   const buyExtraCredits = useAuthStore((state) => state.buyExtraCredits);
   const upgradeToProPlan = useAuthStore((state) => state.upgradeToProPlan);
@@ -43,12 +48,44 @@ export default function YourPlanPage() {
   const [_selectedExtraCreditBundle, _setSelectedExtraCreditBundle] = useState<typeof PRICING.EXTRA_CREDIT_BUNDLES[number] | null>(null);
   const [selectedTeamsTier, setSelectedTeamsTier] = useState<typeof PRICING.TEAMS_TIERS[number]>(PRICING.TEAMS_TIERS[0]);
   const [teamSeats, setTeamSeats] = useState(0);
+  const [isAnnualBilling, setIsAnnualBilling] = useState(false);
+  const [isAnnualBillingUpgrade, setIsAnnualBillingUpgrade] = useState(false);
   const [extraCreditsCount, setExtraCreditsCount] = useState<Record<number, number>>({
     1000: 0,
     10000: 0,
   });
 
   if (!user) return null;
+
+  // Show billing admin notice if viewing as billing admin
+  if (isViewingAsBillingAdmin) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Billing Admin Access</CardTitle>
+            <CardDescription>You have administrative access to this team</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                You are added as a billing Admin to this team and have no credits. Go to Manage Team or Team Usage to see team plan and view usage.
+              </AlertDescription>
+            </Alert>
+            <div className="flex gap-3">
+              <Button asChild>
+                <Link href="/teams/usage">Go to Team Usage</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/teams/manage">Go to Manage Team</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Calculate total credits and used credits for all plans
   const totalCredits =
@@ -70,19 +107,30 @@ export default function YourPlanPage() {
     setShowPayment(true);
   };
 
+  const getDisplayPrice = (tier: typeof PRICING.PRO_TIERS[number], annual: boolean) => {
+    return annual ? tier.annualPrice : tier.price;
+  };
+
+  const getMonthlyEquivalent = (tier: typeof PRICING.PRO_TIERS[number]) => {
+    return Math.round(tier.annualPrice / 12);
+  };
+
   const handleConfirmPayment = () => {
+    const billingInterval: BillingInterval = isAnnualBilling ? 'annual' : 'monthly';
+    const price = isAnnualBilling ? selectedTier.annualPrice : selectedTier.price;
     const proPlan = {
       monthlyCredits: selectedTier.credits,
-      price: selectedTier.price,
+      price,
       name: selectedTier.name,
+      billingInterval,
     };
 
     upgradeToProPlan(proPlan);
     
     addInvoice({
       date: new Date(),
-      amount: selectedTier.price,
-      description: `${selectedTier.name} subscription`,
+      amount: price,
+      description: `${selectedTier.name} subscription (${billingInterval})`,
       status: 'paid',
     });
 
@@ -102,6 +150,7 @@ export default function YourPlanPage() {
       sharedCreditsUsed: 0,
       planName: selectedTeamsTier.name,
       members: [],
+      billingAdmins: [],
       extraCredits: 0,
     };
 
@@ -133,6 +182,7 @@ export default function YourPlanPage() {
       sharedCreditsUsed: 0,
       planName: upgradeSelectedTier.name,
       members: [],
+      billingAdmins: [],
       extraCredits: 0,
     };
 
@@ -214,18 +264,21 @@ export default function YourPlanPage() {
   const handleConfirmProUpgrade = () => {
     if (!selectedProUpgradeTier) return;
     
+    const billingInterval: BillingInterval = isAnnualBillingUpgrade ? 'annual' : 'monthly';
+    const price = isAnnualBillingUpgrade ? selectedProUpgradeTier.annualPrice : selectedProUpgradeTier.price;
     const proPlan = {
       monthlyCredits: selectedProUpgradeTier.credits,
-      price: selectedProUpgradeTier.price,
+      price,
       name: selectedProUpgradeTier.name,
+      billingInterval,
     };
 
     upgradePro(proPlan);
     
     addInvoice({
       date: new Date(),
-      amount: selectedProUpgradeTier.price,
-      description: `Upgraded to ${selectedProUpgradeTier.name}`,
+      amount: price,
+      description: `Upgraded to ${selectedProUpgradeTier.name} (${billingInterval})`,
       status: 'paid',
     });
 
@@ -243,18 +296,41 @@ export default function YourPlanPage() {
         <QuickStatsCard user={user} totalCredits={totalCredits} usedCredits={usedCredits} />
 
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="border-primary/50">
+          <Card className="border-primary/50 flex flex-col">
             <CardHeader>
-              <CardTitle>Upgrade to Pro</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Upgrade to Pro</CardTitle>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Label htmlFor="annual-toggle-free" className="text-sm cursor-pointer whitespace-nowrap">
+                    Annual <span className="text-primary font-medium">(20% off)</span>
+                  </Label>
+                  <Switch
+                    id="annual-toggle-free"
+                    checked={isAnnualBilling}
+                    onCheckedChange={setIsAnnualBilling}
+                  />
+                </div>
+              </div>
               <CardDescription>Get more credits and premium features</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+            <CardContent className="flex-1 flex flex-col">
+              <div className="space-y-4 flex-1 flex flex-col">
                 <div>
-                  <div className="text-3xl font-bold">${selectedTier.price}/mo</div>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedTier.credits.toLocaleString()} credits per month
-                  </p>
+                  {isAnnualBilling ? (
+                    <>
+                      <div className="text-3xl font-bold">${selectedTier.annualPrice}/yr</div>
+                      <p className="text-sm text-muted-foreground">
+                        ${getMonthlyEquivalent(selectedTier)}/month · {selectedTier.credits.toLocaleString()} credits per month
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-3xl font-bold">${selectedTier.price}/mo</div>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedTier.credits.toLocaleString()} credits per month
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <Select
@@ -270,15 +346,11 @@ export default function YourPlanPage() {
                   <SelectContent>
                     {PRICING.PRO_TIERS.map((tier) => (
                       <SelectItem key={tier.credits} value={tier.credits.toString()}>
-                        {tier.credits.toLocaleString()} credits / month (${tier.price})
+                        {tier.credits.toLocaleString()} credits / month ({isAnnualBilling ? `$${tier.annualPrice}/yr` : `$${tier.price}/mo`})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-
-                <Button className="w-full" onClick={handleUpgradeToPro}>
-                  Upgrade to Pro
-                </Button>
 
                 <ul className="space-y-2 text-sm pt-2">
                   <li className="flex items-center">
@@ -294,6 +366,12 @@ export default function YourPlanPage() {
                     Priority support
                   </li>
                 </ul>
+
+                <div className="mt-auto pt-4">
+                  <Button className="w-full" onClick={handleUpgradeToPro}>
+                    Upgrade to Pro {isAnnualBilling ? `- $${selectedTier.annualPrice}/yr` : `- $${selectedTier.price}/mo`}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -377,10 +455,6 @@ export default function YourPlanPage() {
                   </Alert>
                 )}
 
-                <Button className="w-full" onClick={handleUpgradeToTeams}>
-                  {teamSeats > 0 ? `Upgrade to Teams - $${totalTeamsMonthly} / month` : 'Upgrade to Teams'}
-                </Button>
-
                 <ul className="space-y-2 text-sm pt-2">
                   <li className="flex items-center">
                     <div className="h-1.5 w-1.5 rounded-full bg-primary mr-2" />
@@ -395,6 +469,10 @@ export default function YourPlanPage() {
                     Set credit limits per user
                   </li>
                 </ul>
+
+                <Button className="w-full" onClick={handleUpgradeToTeams}>
+                  {teamSeats > 0 ? `Upgrade to Teams - $${totalTeamsMonthly} / month` : 'Upgrade to Teams'}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -408,8 +486,8 @@ export default function YourPlanPage() {
           open={showPayment}
           onOpenChange={setShowPayment}
           title="Confirm Pro Subscription"
-          description={`You're subscribing to ${selectedTier.name} with ${selectedTier.credits.toLocaleString()} monthly credits.`}
-          amount={selectedTier.price}
+          description={`You're subscribing to ${selectedTier.name} with ${selectedTier.credits.toLocaleString()} monthly credits (${isAnnualBilling ? 'annual' : 'monthly'} billing).`}
+          amount={isAnnualBilling ? selectedTier.annualPrice : selectedTier.price}
           onConfirm={handleConfirmPayment}
         />
 
@@ -606,6 +684,16 @@ export default function YourPlanPage() {
                   </div>
                 </div>
 
+                {/* No Proration Info for Annual Pro Users */}
+                {user.proPlan?.billingInterval === 'annual' && (
+                  <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+                    <Info className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-sm">
+                      Teams is billed monthly. You will be charged the full monthly amount — no proration for remaining time on your annual Pro plan.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {/* Credit Transfer Info - Full Width */}
                 {remainingProCredits > 0 && (
                   <Alert className="border-primary/50 bg-primary/5">
@@ -642,8 +730,22 @@ export default function YourPlanPage() {
             {/* Column 1: Get More from Pro */}
             <Card>
               <CardHeader>
-                <CardTitle>Get More from Pro</CardTitle>
-                <CardDescription>Upgrade to a higher plan tier for more monthly credits</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle>Get More from Pro</CardTitle>
+                    <CardDescription>Upgrade to a higher plan tier for more monthly credits</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Label htmlFor="annual-toggle-pro" className="text-sm cursor-pointer whitespace-nowrap">
+                      Annual <span className="text-primary font-medium">(20% off)</span>
+                    </Label>
+                    <Switch
+                      id="annual-toggle-pro"
+                      checked={isAnnualBillingUpgrade}
+                      onCheckedChange={setIsAnnualBillingUpgrade}
+                    />
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -662,7 +764,7 @@ export default function YourPlanPage() {
                       {/* Current Plan Option */}
                       {user.proPlan && (
                         <SelectItem value={user.proPlan.monthlyCredits.toString()}>
-                          {user.proPlan.name} - {user.proPlan.monthlyCredits.toLocaleString()} credits/month (${user.proPlan.price}) - Current Plan
+                          {user.proPlan.name} - {user.proPlan.monthlyCredits.toLocaleString()} credits/month (${user.proPlan.price}{user.proPlan.billingInterval === 'annual' ? '/yr' : '/mo'}) - Current Plan
                         </SelectItem>
                       )}
                       {/* Higher Tier Options */}
@@ -670,7 +772,7 @@ export default function YourPlanPage() {
                         .filter(tier => user.proPlan && tier.credits > user.proPlan.monthlyCredits)
                         .map((tier) => (
                           <SelectItem key={tier.credits} value={tier.credits.toString()}>
-                            {tier.name} - {tier.credits.toLocaleString()} credits/month (${tier.price})
+                            {tier.name} - {tier.credits.toLocaleString()} credits/month ({isAnnualBillingUpgrade ? `$${tier.annualPrice}/yr` : `$${tier.price}/mo`})
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -705,7 +807,7 @@ export default function YourPlanPage() {
                   {selectedProUpgradeTier && user.proPlan && selectedProUpgradeTier.credits === user.proPlan.monthlyCredits
                     ? 'Current Plan'
                     : selectedProUpgradeTier 
-                    ? `Upgrade Plan - $${selectedProUpgradeTier.price}/month`
+                    ? `Upgrade Plan - ${isAnnualBillingUpgrade ? `$${selectedProUpgradeTier.annualPrice}/yr` : `$${selectedProUpgradeTier.price}/mo`}`
                     : 'Upgrade Plan'}
                 </Button>
               </CardContent>
@@ -817,7 +919,7 @@ export default function YourPlanPage() {
           open={showTeamsPayment}
           onOpenChange={setShowTeamsPayment}
           title="Authorize Teams Subscription Payment"
-          description={`You're upgrading to ${upgradeSelectedTier.name} with ${upgradeSeats} seats. Your remaining Pro credits will be transferred.`}
+          description={`You're upgrading to ${upgradeSelectedTier.name} with ${upgradeSeats} seats.${user.proPlan?.billingInterval === 'annual' ? ' Teams is billed monthly — no proration for remaining annual Pro time.' : ''} Your remaining Pro credits will be transferred.`}
           amount={upgradeSeats * PRICING.SEAT_PRICE + upgradeSelectedTier.price}
           onConfirm={handleProToTeamsUpgrade}
         />
@@ -835,8 +937,8 @@ export default function YourPlanPage() {
           open={showProUpgradePayment}
           onOpenChange={setShowProUpgradePayment}
           title="Confirm Plan Upgrade"
-          description={selectedProUpgradeTier ? `You're upgrading to ${selectedProUpgradeTier.name} with ${selectedProUpgradeTier.credits.toLocaleString()} monthly credits.` : ''}
-          amount={selectedProUpgradeTier?.price || 0}
+          description={selectedProUpgradeTier ? `You're upgrading to ${selectedProUpgradeTier.name} with ${selectedProUpgradeTier.credits.toLocaleString()} monthly credits (${isAnnualBillingUpgrade ? 'annual' : 'monthly'} billing).` : ''}
+          amount={selectedProUpgradeTier ? (isAnnualBillingUpgrade ? selectedProUpgradeTier.annualPrice : selectedProUpgradeTier.price) : 0}
           onConfirm={handleConfirmProUpgrade}
         />
 

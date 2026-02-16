@@ -15,15 +15,23 @@ import type { CreditTransaction } from '@/lib/types';
 
 export default function TeamUsagePage() {
   const user = useAuthStore((state) => state.getCurrentUser());
+  const isViewingAsBillingAdmin = useAuthStore((state) => state.isViewingAsBillingAdmin());
   const [selectedMember, setSelectedMember] = useState<string>('');
 
-  if (!user || user.plan !== 'teams' || !user.teamsPlan) {
+  // Allow access if user has teams plan OR is viewing as billing admin
+  if (!user || (user.plan !== 'teams' && !isViewingAsBillingAdmin) || !user.teamsPlan) {
     return null;
   }
 
   const totalCredits = user.teamsPlan.monthlyCredits;
   const usedCredits = user.teamsPlan.sharedCreditsUsed;
   const isTeamsOwner = user.teamsPlan.members.find(m => m.email === user.email)?.role === 'owner';
+  
+  // Filter out billing admins from member selection (they don't use credits)
+  const billingAdminEmails = (user.teamsPlan.billingAdmins || []).map(admin => admin.email);
+  const membersWithCredits = user.teamsPlan.members.filter(
+    member => !billingAdminEmails.includes(member.email)
+  );
   
   // Mock transactions for the selected member
   const transactions: CreditTransaction[] = user.creditTransactions || [];
@@ -83,7 +91,7 @@ export default function TeamUsagePage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Members</SelectItem>
-              {user.teamsPlan.members.map((member) => (
+              {membersWithCredits.map((member) => (
                 <SelectItem key={member.email} value={member.email}>
                   {member.email} ({member.role})
                 </SelectItem>
