@@ -138,7 +138,7 @@ export function AppSidebar() {
   };
 
   const navItems = [
-    { href: '/overview', icon: LayoutDashboard, label: "What's new!" },
+    { href: '/overview', icon: LayoutDashboard, label: 'Get Started' },
     { href: '/your-plan', icon: CreditCard, label: 'Your Plan' },
     { href: '/usage', icon: TrendingUp, label: 'Usage' },
   ];
